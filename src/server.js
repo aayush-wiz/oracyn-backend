@@ -14,8 +14,8 @@ app.use(cors({ origin: "*" }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
-app.use("/api/chats", chatRoutes); // Changed from /api/chat
-app.use("/api", uploadRoutes); // Adjusted to mount /api/chats/:id/upload correctly
+app.use("/api/chats", chatRoutes);
+app.use("/api", uploadRoutes); 
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

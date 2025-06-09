@@ -23,6 +23,7 @@ model Chat {
   userId    Int
   title     String?
   status    ChatStatus @default(NONE)
+  state     ChatState  @default(UPLOAD) // Track the current state of the chat
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   user      User       @relation(fields: [userId], references: [id])
@@ -36,25 +37,38 @@ enum ChatStatus {
   NONE
 }
 
+enum ChatState {
+  UPLOAD // User is uploading documents and writing initial query
+  CHAT // User is in active chat mode with AI
+  VISUALIZE // User is viewing documents in visualization mode
+}
+
 model Document {
   id         Int      @id @default(autoincrement())
   chatId     Int
   name       String
-  filePath   String
-  size       Int?     // Added to store file size
-  type       String?  // Added to store MIME type
+  filePath   String // Server file path or URL
+  size       Int // File size in bytes
+  type       String // MIME type (e.g., "application/pdf")
   uploadedAt DateTime @default(now())
-  chat       Chat     @relation(fields: [chatId], references: [id])
+  processed  Boolean  @default(false) // Whether the document has been processed by AI
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
 }
 
 model Message {
-  id        Int      @id @default(autoincrement())
+  id        Int         @id @default(autoincrement())
   chatId    Int
   sender    Sender
-  content   String
-  type      MessageType @default(REGULAR) // Added to distinguish query/response
+  content   String      @db.Text // Use Text for longer content
+  type      MessageType @default(REGULAR)
+  metadata  Json? // Store additional metadata like file references, processing info
   createdAt DateTime    @default(now())
-  chat      Chat        @relation(fields: [chatId], references: [id])
+  updatedAt DateTime    @updatedAt
+  chat      Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  @@index([chatId, createdAt])
 }
 
 enum Sender {
@@ -63,7 +77,8 @@ enum Sender {
 }
 
 enum MessageType {
-  REGULAR
-  QUERY
-  RESPONSE
+  REGULAR // Normal chat messages
+  QUERY // User's initial query that starts the chat
+  RESPONSE // AI's response to queries
+  SYSTEM // System messages (e.g., "Documents uploaded successfully")
 }

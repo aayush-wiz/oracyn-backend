@@ -11,4 +11,8 @@ router.get("/:id/files", authMiddleware, chatController.getChatFiles);
 router.post("/:id/query", authMiddleware, chatController.submitQuery);
 router.post("/:id/share", authMiddleware, chatController.shareChat);
 
+//routes for chat functionality
+router.get("/:id/messages", authMiddleware, chatController.getChatMessages);
+router.post("/:id/messages", authMiddleware, chatController.sendMessage);
+
 export default router;

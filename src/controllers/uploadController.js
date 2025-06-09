@@ -31,6 +31,7 @@ export async function uploadFile(req, res) {
 
   try {
     const { Location } = await s3.upload(params).promise();
+
     const document = await prisma.document.create({
       data: {
         chatId,
@@ -39,9 +40,18 @@ export async function uploadFile(req, res) {
         size: file.size,
         type: file.mimetype,
         uploadedAt: new Date(),
+        processed: false, // Will be set to true when AI processes it
       },
     });
+
+    // Update chat timestamp
+    await prisma.chat.update({
+      where: { id: chatId },
+      data: { updatedAt: new Date() },
+    });
+
     res.status(200).json({
+      id: document.id,
       url: Location,
       key,
       name: document.name,
