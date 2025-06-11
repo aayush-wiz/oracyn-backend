@@ -1,36 +1,58 @@
 {
-  "name": "rag-doc-analyzer-backend",
+  "name": "rag-backend",
   "version": "1.0.0",
-  "description": "Backend API gateway for RAG document analyzer",
-  "main": "src/server.js",
+  "description": "Backend API for RAG Document Analysis Application",
   "type": "module",
+  "main": "server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "postinstall": "npx prisma generate"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "echo 'No build step required for Node.js'",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "migrate": "npx prisma migrate dev",
+    "migrate:prod": "npx prisma migrate deploy",
+    "db:push": "npx prisma db push",
+    "db:seed": "node prisma/seed.js",
+    "db:studio": "npx prisma studio",
+    "generate": "npx prisma generate",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
-  "keywords": [
-    "rag",
-    "document-analyzer",
-    "api",
-    "express",
-    "node"
-  ],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
-    "@prisma/client": "^6.9.0",
-    "aws-sdk": "^2.1692.0",
-    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
-    "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1"
+    "helmet": "^7.0.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.1",
+    "multer": "^1.4.5-lts.1",
+    "express-rate-limit": "^6.8.1",
+    "dotenv": "^16.3.1",
+    "prisma": "^5.1.1",
+    "@prisma/client": "^5.1.1",
+    "aws-sdk": "^2.1421.0",
+    "zod": "^3.22.2"
   },
   "devDependencies": {
-    "prisma": "^6.9.0"
+    "nodemon": "^3.0.1",
+    "jest": "^29.6.1",
+    "supertest": "^6.3.3",
+    "eslint": "^8.45.0",
+    "@babel/preset-env": "^7.22.9",
+    "babel-jest": "^29.6.1"
   },
   "engines": {
     "node": ">=18.0.0"
-  }
+  },
+  "keywords": [
+    "rag",
+    "document-analysis",
+    "ai",
+    "api",
+    "express",
+    "prisma"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
 }
