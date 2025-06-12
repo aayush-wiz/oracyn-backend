@@ -1,5 +1,7 @@
+// backend/src/controllers/uploadController.js (UPDATED)
 import s3 from "../utils/r2Client.js";
 import { PrismaClient } from "@prisma/client";
+import { aiService } from "../services/aiService.js";
 
 const prisma = new PrismaClient();
 
@@ -50,6 +52,15 @@ export async function uploadFile(req, res) {
       data: { updatedAt: new Date() },
     });
 
+    // Process document in AI service (async)
+    processDocumentAsync(
+      document.id,
+      chatId,
+      Location,
+      file.originalname,
+      file.mimetype
+    );
+
     res.status(200).json({
       id: document.id,
       url: Location,
@@ -57,9 +68,47 @@ export async function uploadFile(req, res) {
       name: document.name,
       type: document.type,
       size: document.size,
+      processed: false,
     });
   } catch (err) {
     console.error("Upload error:", err);
     res.status(500).json({ error: "Upload failed" });
+  }
+}
+
+// Async function to process document in AI service
+async function processDocumentAsync(
+  documentId,
+  chatId,
+  filePath,
+  fileName,
+  fileType
+) {
+  try {
+    console.log(`Processing document ${documentId} in AI service...`);
+
+    const result = await aiService.processDocument({
+      chat_id: chatId,
+      document_id: documentId,
+      file_path: filePath,
+      file_name: fileName,
+      file_type: fileType,
+    });
+
+    // Update document status in database
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { processed: result.success },
+    });
+
+    console.log(`Document ${documentId} processing result:`, result);
+  } catch (error) {
+    console.error(`Failed to process document ${documentId}:`, error);
+
+    // Mark as processed: false if failed
+    await prisma.document.update({
+      where: { id: documentId },
+      data: { processed: false },
+    });
   }
 }

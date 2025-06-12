@@ -1,4 +1,7 @@
+// backend/src/controllers/chatController.js (UPDATED)
 import { PrismaClient } from "@prisma/client";
+import { aiService } from "../services/aiService.js";
+
 const prisma = new PrismaClient();
 
 const getChats = async (req, res) => {
@@ -104,15 +107,18 @@ const getChatFiles = async (req, res) => {
         size: true,
         type: true,
         uploadedAt: true,
+        processed: true,
       },
     });
     res.json(
       documents.map((doc) => ({
+        id: doc.id,
         url: doc.filePath,
         key: doc.filePath.split("/").pop(),
         name: doc.name,
         type: doc.type,
         size: doc.size,
+        processed: doc.processed,
       }))
     );
   } catch (error) {
@@ -121,7 +127,6 @@ const getChatFiles = async (req, res) => {
   }
 };
 
-// NEW: Get chat messages
 const getChatMessages = async (req, res) => {
   const { id } = req.params;
   try {
@@ -139,7 +144,7 @@ const getChatMessages = async (req, res) => {
 
     const documents = await prisma.document.findMany({
       where: { chatId: parseInt(id) },
-      select: { id: true, name: true, type: true, size: true },
+      select: { id: true, name: true, type: true, size: true, processed: true },
     });
 
     res.json({ messages, documents, chatState: chat.state });
@@ -149,7 +154,6 @@ const getChatMessages = async (req, res) => {
   }
 };
 
-// NEW: Send message to chat
 const sendMessage = async (req, res) => {
   const { id } = req.params;
   const { content, type = "REGULAR" } = req.body;
@@ -176,7 +180,7 @@ const sendMessage = async (req, res) => {
       },
     });
 
-    // Generate AI response (placeholder - integrate with your AI service)
+    // Generate AI response using AI service
     const aiResponse = await generateAIResponse(content, parseInt(id));
 
     const assistantMessage = await prisma.message.create({
@@ -227,7 +231,7 @@ const submitQuery = async (req, res) => {
       },
     });
 
-    // Generate AI response
+    // Generate AI response using AI service
     const aiResponse = await generateAIResponse(prompt, parseInt(id));
 
     const responseMessage = await prisma.message.create({
@@ -264,7 +268,7 @@ const shareChat = async (req, res) => {
     if (!chat) {
       return res.status(404).json({ message: "Chat not found" });
     }
-    // Generate a unique share link (placeholder; implement with your frontend URL)
+    // Generate a unique share link
     const shareLink = `${process.env.FRONTEND_URL}/share/${id}/${Date.now()}`;
     res.json({ shareLink });
   } catch (error) {
@@ -273,25 +277,57 @@ const shareChat = async (req, res) => {
   }
 };
 
-// Helper function to generate AI response (placeholder - replace with your AI service later)
+// UPDATED: AI response generation using AI service
 async function generateAIResponse(userMessage, chatId) {
-  // Get documents for context
-  const documents = await prisma.document.findMany({
-    where: { chatId },
-    select: { name: true, type: true },
-  });
+  try {
+    // Call AI service for RAG query
+    const response = await aiService.processQuery({
+      chat_id: chatId,
+      query: userMessage,
+      max_results: 10,
+    });
 
-  // Simple placeholder response - replace with your AI service call
-  return `I've received your message: "${userMessage}". I can see you have ${
-    documents.length
-  } document${documents.length > 1 ? "s" : ""} uploaded. I'll analyze ${
-    documents.length > 0 ? "them" : "this"
-  } and provide insights once the AI service is integrated.
+    // Format response with sources if available
+    let formattedResponse = response.answer;
 
-**Uploaded Documents:**
-${documents.map((doc) => `• ${doc.name} (${doc.type})`).join("\n")}
+    if (response.sources && response.sources.length > 0) {
+      formattedResponse += "\n\n**Sources:**\n";
+      response.sources.forEach((source, index) => {
+        formattedResponse += `${index + 1}. ${source.file_name} (Relevance: ${(
+          source.relevance_score * 100
+        ).toFixed(1)}%)\n`;
+      });
+    }
 
-*This is a placeholder response. The actual AI analysis will be implemented later.*`;
+    if (response.confidence) {
+      formattedResponse += `\n*Confidence: ${(
+        response.confidence * 100
+      ).toFixed(1)}%*`;
+    }
+
+    return formattedResponse;
+  } catch (error) {
+    console.error("AI service error:", error);
+
+    // Fallback response if AI service fails
+    const documents = await prisma.document.findMany({
+      where: { chatId },
+      select: { name: true, type: true, processed: true },
+    });
+
+    return `I apologize, but I'm currently experiencing technical difficulties processing your question. 
+
+**Your uploaded documents:**
+${documents
+  .map(
+    (doc) => `• ${doc.name} (${doc.processed ? "Processed" : "Processing..."})`
+  )
+  .join("\n")}
+
+Please try again in a moment. If the issue persists, please contact support.
+
+*Error: ${error.message}*`;
+  }
 }
 
 export default {
