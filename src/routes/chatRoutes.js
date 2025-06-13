@@ -1,7 +1,7 @@
+// backend/src/routes/chatRoutes.js (UPDATED for Zod validation)
 import { Router } from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
 import chatController from "../controllers/chatController.js";
-import { queryLimiter } from "../middleware/rateLimiter.js";
 import {
   validateCreateChat,
   validateUpdateChat,
@@ -12,31 +12,66 @@ import {
 
 const router = Router();
 
-// Apply auth middleware to all routes
-router.use(authMiddleware);
+// Get all chats for user
+router.get("/", authMiddleware, chatController.getChats);
 
-// Chat CRUD operations
-router.get("/", chatController.getChats);
-router.post("/", validateCreateChat, chatController.createChat);
-router.patch("/:id", validateUpdateChat, chatController.updateChat);
-router.delete("/:id", validateChatParams, chatController.deleteChat);
+// Create new chat
+router.post("/", authMiddleware, validateCreateChat, chatController.createChat);
 
-// Chat file operations
-router.get("/:id/files", validateChatParams, chatController.getChatFiles);
+// Get specific chat
+router.get(
+  "/:id",
+  authMiddleware,
+  validateChatParams,
+  chatController.getChatMessages
+);
 
-// Chat message operations
-router.get("/:id/messages", validateChatParams, chatController.getChatMessages);
-router.post("/:id/messages", validateSendMessage, chatController.sendMessage);
+// Update chat
+router.put(
+  "/:id",
+  authMiddleware,
+  validateUpdateChat,
+  chatController.updateChat
+);
 
-// Query operations with rate limiting
+// Delete chat
+router.delete(
+  "/:id",
+  authMiddleware,
+  validateChatParams,
+  chatController.deleteChat
+);
+
+// Get chat files
+router.get(
+  "/:id/files",
+  authMiddleware,
+  validateChatParams,
+  chatController.getChatFiles
+);
+
+// Send message
+router.post(
+  "/:id/messages",
+  authMiddleware,
+  validateSendMessage,
+  chatController.sendMessage
+);
+
+// Submit query (RAG)
 router.post(
   "/:id/query",
-  queryLimiter,
+  authMiddleware,
   validateSubmitQuery,
   chatController.submitQuery
 );
 
-// Share operations
-router.post("/:id/share", validateChatParams, chatController.shareChat);
+// Share chat
+router.post(
+  "/:id/share",
+  authMiddleware,
+  validateChatParams,
+  chatController.shareChat
+);
 
 export default router;
