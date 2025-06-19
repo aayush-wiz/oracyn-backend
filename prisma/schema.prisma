@@ -1,84 +1,127 @@
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
   provider = "prisma-client-js"
 }
 
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
 model User {
-  id        Int      @id @default(autoincrement())
-  firstName String
-  lastName  String
-  email     String   @unique
-  password  String
+  id         String  @id @default(cuid())
+  email      String  @unique
+  username   String  @unique
+  password   String
+  firstName  String?
+  lastName   String?
+  bio        String?
+  profession String?
+  avatar     String?
+
+  // Account status
+  isActive   Boolean @default(true)
+  isVerified Boolean @default(false)
+
+  // Security
+  lastLogin                DateTime?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+
+  // Timestamps
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  // Relations
   chats     Chat[]
+  documents Document[]
+  charts    Chart[]
+
+  @@map("users")
 }
 
 model Chat {
-  id        Int        @id @default(autoincrement())
-  userId    Int
-  title     String?
-  status    ChatStatus @default(NONE)
-  state     ChatState  @default(UPLOAD) // Track the current state of the chat
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  user      User       @relation(fields: [userId], references: [id])
-  documents Document[]
+  id         String  @id @default(cuid())
+  title      String
+  isArchived Boolean @default(false)
+
+  // Relations
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
-}
+  documents Document[]
+  charts    Chart[]
 
-enum ChatStatus {
-  STARRED
-  SAVED
-  NONE
-}
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-enum ChatState {
-  UPLOAD // User is uploading documents and writing initial query
-  CHAT // User is in active chat mode with AI
-  VISUALIZE // User is viewing documents in visualization mode
-}
-
-model Document {
-  id         Int      @id @default(autoincrement())
-  chatId     Int
-  name       String
-  filePath   String // Server file path or URL
-  size       Int // File size in bytes
-  type       String // MIME type (e.g., "application/pdf")
-  uploadedAt DateTime @default(now())
-  processed  Boolean  @default(false) // Whether the document has been processed by AI
-  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
-
-  @@index([chatId])
+  @@map("chats")
 }
 
 model Message {
-  id        Int         @id @default(autoincrement())
-  chatId    Int
-  sender    Sender
-  content   String      @db.Text // Use Text for longer content
-  type      MessageType @default(REGULAR)
-  metadata  Json? // Store additional metadata like file references, processing info
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  chat      Chat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  id       String @id @default(cuid())
+  content  String
+  role     String // 'user' | 'assistant' | 'system'
+  metadata Json? // Store additional data like processing time, tokens, etc.
 
-  @@index([chatId, createdAt])
+  // Relations
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  @@map("messages")
 }
 
-enum Sender {
-  USER
-  ASSISTANT
+model Document {
+  id           String @id @default(cuid())
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+
+  // Processing status
+  status        String  @default("pending") // 'pending' | 'processing' | 'completed' | 'failed'
+  extractedText String?
+  summary       String?
+  metadata      Json?
+
+  // Relations
+  userId String
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId String?
+  chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("documents")
 }
 
-enum MessageType {
-  REGULAR // Normal chat messages
-  QUERY // User's initial query that starts the chat
-  RESPONSE // AI's response to queries
-  SYSTEM // System messages (e.g., "Documents uploaded successfully")
+model Chart {
+  id          String  @id @default(cuid())
+  type        String // 'line' | 'bar' | 'pie' | 'scatter' | etc.
+  title       String
+  description String?
+  config      Json // Chart configuration and data
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("charts")
 }

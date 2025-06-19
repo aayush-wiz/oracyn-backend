@@ -1,0 +1,85 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: oracyn_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: oracyn_user
+      POSTGRES_PASSWORD: oracyn_password
+      POSTGRES_DB: oracyn_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - oracyn_network
+
+  # Redis for session storage and caching
+  redis:
+    image: redis:7-alpine
+    container_name: oracyn_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - oracyn_network
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oracyn_backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      DATABASE_URL: postgresql://oracyn_user:oracyn_password@postgres:5432/oracyn_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
+      BCRYPT_ROUNDS: 12
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./src:/app/src
+      - ./uploads:/app/uploads
+    networks:
+      - oracyn_network
+    command: npm run dev
+
+  # Prisma Studio (optional - for database management)
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oracyn_prisma_studio
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    environment:
+      DATABASE_URL: postgresql://oracyn_user:oracyn_password@postgres:5432/oracyn_db
+    depends_on:
+      - postgres
+    networks:
+      - oracyn_network
+    command: npx prisma studio --hostname 0.0.0.0
+    profiles:
+      - studio
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  oracyn_network:
+    driver: bridge
