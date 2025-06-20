@@ -1,46 +1,26 @@
-# Use Node.js 18 Alpine as base image
-FROM node:18-alpine
+# 1. Use a more complete base image that includes necessary system libraries
+FROM node:20-bookworm
 
-# Set working directory
-WORKDIR /app
+# 2. Set working directory in the container
+WORKDIR /usr/src/app
 
-# Install system dependencies
-RUN apk add --no-cache \
-  python3 \
-  make \
-  g++ \
-  && rm -rf /var/cache/apk/*
-
-# Copy package files
+# 3. Copy package.json and package-lock.json
 COPY package*.json ./
+
+# 4. Install dependencies
+RUN npm install
+
+# 5. Copy Prisma schema
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Generate Prisma client
+# 6. Generate Prisma Client
 RUN npx prisma generate
 
-# Copy source code
-COPY src ./src
+# 7. Copy the rest of your application's source code
+COPY . .
 
-# Create uploads directory
-RUN mkdir -p uploads
+# 8. Expose the port the app runs on
+EXPOSE 3000
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-  adduser -S nextjs -u 1001
-
-# Change ownership of the app directory
-RUN chown -R nextjs:nodejs /app
-USER nextjs
-
-# Expose port
-EXPOSE 5000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node healthcheck.js
-
-# Start the application
+# 9. Command to run the application
 CMD ["npm", "start"]

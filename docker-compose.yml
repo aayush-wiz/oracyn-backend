@@ -1,85 +1,81 @@
+# =================================================================
+# FILE: docker-compose.yml (FINAL-LATEST)
+# DESCRIPTION: This version uses the :latest tag to ensure the
+# newest version of n8n is always pulled after a cache clean.
+# =================================================================
 version: "3.8"
 
 services:
-  # PostgreSQL Database
-  postgres:
-    image: postgres:15-alpine
-    container_name: oracyn_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: oracyn_user
-      POSTGRES_PASSWORD: oracyn_password
-      POSTGRES_DB: oracyn_db
+  # 1. ORACYN Backend Service
+  oracyn_backend_express:
+    build: .
+    container_name: oracyn_backend_express
     ports:
-      - "5432:5432"
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - N8N_WEBHOOK_URL=http://oracyn_n8n_service:5678/webhook/rag-workflow
+      - N8N_WEBHOOK_URL_DOCUMENT=http://oracyn_n8n_service:5678/webhook/document-processing
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
+    depends_on:
+      - oracyn_postgres_db
+      - oracyn_n8n_service
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+    networks:
+      - oracyn-network
+
+  # 2. PostgreSQL Database Service
+  oracyn_postgres_db:
+    image: postgres:15
+    container_name: oracyn_postgres_db
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=ragdb
+    ports:
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - oracyn_network
+      - oracyn-network
 
-  # Redis for session storage and caching
-  redis:
-    image: redis:7-alpine
-    container_name: oracyn_redis
-    restart: unless-stopped
+  # 3. n8n Workflow Service
+  oracyn_n8n_service:
+    # THIS IS THE CORRECTED LINE:
+    image: n8nio/n8n:latest
+    container_name: oracyn_n8n_service
     ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - oracyn_network
-
-  # Backend API
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: oracyn_backend
-    restart: unless-stopped
-    ports:
-      - "5000:5000"
+      - "5678:5678"
     environment:
-      NODE_ENV: development
-      PORT: 5000
-      DATABASE_URL: postgresql://oracyn_user:oracyn_password@postgres:5432/oracyn_db
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: your-super-secret-jwt-key-change-in-production
-      JWT_REFRESH_SECRET: your-super-secret-refresh-key-change-in-production
-      BCRYPT_ROUNDS: 12
-    depends_on:
-      - postgres
-      - redis
+      - N8N_HOST=oracyn_n8n_service
+      - N8N_PORT=5678
+      - WEBHOOK_TUNNEL_URL=http://oracyn_n8n_service:5678/
+      - INTERNAL_API_KEY=${INTERNAL_API_KEY}
     volumes:
-      - ./src:/app/src
+      - n8n_data:/home/node/.n8n
       - ./uploads:/app/uploads
     networks:
-      - oracyn_network
-    command: npm run dev
+      - oracyn-network
 
-  # Prisma Studio (optional - for database management)
-  prisma-studio:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: oracyn_prisma_studio
-    restart: unless-stopped
+  # 4. Chroma DB Vector Store Service
+  oracyn_chroma_db:
+    image: chromadb/chroma
+    container_name: oracyn_chroma_db
     ports:
-      - "5555:5555"
-    environment:
-      DATABASE_URL: postgresql://oracyn_user:oracyn_password@postgres:5432/oracyn_db
-    depends_on:
-      - postgres
+      - "8000:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
     networks:
-      - oracyn_network
-    command: npx prisma studio --hostname 0.0.0.0
-    profiles:
-      - studio
+      - oracyn-network
 
 volumes:
   postgres_data:
-  redis_data:
+  n8n_data:
+  chroma_data:
 
 networks:
-  oracyn_network:
+  oracyn-network:
     driver: bridge

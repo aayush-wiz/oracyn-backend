@@ -1,38 +1,28 @@
+// prisma/schema.prisma
+
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-generator client {
-  provider = "prisma-client-js"
-}
-
+// 1. Define the data source (PostgreSQL) and the provider.
+// The DATABASE_URL is an environment variable that will be loaded from the .env file.
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+// 2. Define the generator for the Prisma Client.
+// This tells Prisma to generate the client code for JavaScript.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 3. Define the User model
+// This corresponds to your user accounts.
 model User {
-  id         String  @id @default(cuid())
-  email      String  @unique
-  username   String  @unique
-  password   String
-  firstName  String?
-  lastName   String?
-  bio        String?
-  profession String?
-  avatar     String?
-
-  // Account status
-  isActive   Boolean @default(true)
-  isVerified Boolean @default(false)
-
-  // Security
-  lastLogin                DateTime?
-  passwordResetToken       String?
-  passwordResetExpires     DateTime?
-  emailVerificationToken   String?
-  emailVerificationExpires DateTime?
-
-  // Timestamps
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String
+  password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -40,88 +30,68 @@ model User {
   chats     Chat[]
   documents Document[]
   charts    Chart[]
-
-  @@map("users")
 }
 
+// 4. Define the Chat model
+// This corresponds to the `chats` array in your Zustand store.
 model Chat {
-  id         String  @id @default(cuid())
-  title      String
-  isArchived Boolean @default(false)
+  id        String   @id @default(uuid())
+  title     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
+  user      User       @relation(fields: [userId], references: [id])
   userId    String
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   documents Document[]
   charts    Chart[]
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("chats")
 }
 
+// 5. Define the Message model
+// Represents a single message within a chat.
 model Message {
-  id       String @id @default(cuid())
-  content  String
-  role     String // 'user' | 'assistant' | 'system'
-  metadata Json? // Store additional data like processing time, tokens, etc.
+  id        String   @id @default(uuid())
+  sender    String // "user" or "assistant"
+  text      String   @db.Text
+  timestamp DateTime @default(now())
 
   // Relations
-  chatId String
   chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt DateTime @default(now())
-
-  @@map("messages")
+  chatId String
 }
 
+// 6. Define the Document model
+// Represents an uploaded file.
 model Document {
-  id           String @id @default(cuid())
-  filename     String
-  originalName String
-  mimeType     String
-  size         Int
-  path         String
-
-  // Processing status
-  status        String  @default("pending") // 'pending' | 'processing' | 'completed' | 'failed'
-  extractedText String?
-  summary       String?
-  metadata      Json?
+  id         String   @id @default(uuid())
+  fileName   String
+  filePath   String // Path where the file is stored on the server
+  fileType   String
+  fileSize   Float // Store size in bytes
+  uploadedAt DateTime @default(now())
 
   // Relations
+  user   User   @relation(fields: [userId], references: [id])
   userId String
-  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chatId String?
-  chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: SetNull)
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("documents")
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  chatId String
 }
 
+// 7. Define the Chart model
+// Corresponds to the `charts` array in your Zustand store.
 model Chart {
-  id          String  @id @default(cuid())
-  type        String // 'line' | 'bar' | 'pie' | 'scatter' | etc.
-  title       String
-  description String?
-  config      Json // Chart configuration and data
+  id          String   @id @default(uuid())
+  type        String // e.g., 'bar', 'line'
+  label       String
+  data        Json // Store the complex chart data object as JSON
+  config      Json // Store the chart configuration as JSON
+  createdFrom String
+  createdAt   DateTime @default(now())
 
   // Relations
+  user   User   @relation(fields: [userId], references: [id])
   userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chatId String
   chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
-
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("charts")
+  chatId String
 }
