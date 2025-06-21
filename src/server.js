@@ -32,9 +32,6 @@ app.use((err, req, res, next) => {
   res.status(500).send("Something broke!");
 });
 
-// This will initialize the gRPC client when the server starts
-require("./grpcClient");
-
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });

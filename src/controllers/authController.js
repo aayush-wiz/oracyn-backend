@@ -1,7 +1,15 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: 'file:/usr/src/app/prisma/dev.db',
+    },
+  },
+});
+
+console.log(process.env.DATABASE_URL);
 
 // Generate JWT
 const generateToken = (id) => {

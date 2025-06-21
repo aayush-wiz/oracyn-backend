@@ -1,3 +1,9 @@
+# =================================================================
+# FILE: oracyn-backend/Dockerfile (DEFINITIVE FIX)
+# This uses the 'node:20-bookworm' image to ensure the required
+# system libraries for Prisma are present.
+# =================================================================
+
 # 1. Use a more complete base image that includes necessary system libraries
 FROM node:20-bookworm
 

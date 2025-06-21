@@ -1,21 +1,22 @@
+// =================================================================
+// FILE: oracyn-backend/src/controllers/chatController.js (DEFINITIVE FIX)
+// This version uses async/await to fix the race condition, ensuring
+// the document is fully processed before the API returns a success message.
+// =================================================================
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const fs = require("fs");
-// Import our new gRPC client instead of using node-fetch
-const grpcClient = require("../grpcClient");
+const axios = require("axios");
 
-// @desc    Get all chats for the logged-in user
+const AI_SERVICE_URL =
+  process.env.AI_SERVICE_URL || "http://oracyn_ai_service:8000";
+
+// --- Functions that do not need changes ---
 const getChats = async (req, res) => {
   try {
     const chats = await prisma.chat.findMany({
       where: { userId: req.user.id },
       orderBy: { updatedAt: "desc" },
-      include: {
-        messages: {
-          orderBy: { timestamp: "asc" },
-          take: 1,
-        },
-      },
     });
     res.status(200).json(chats);
   } catch (error) {
@@ -25,11 +26,12 @@ const getChats = async (req, res) => {
   }
 };
 
-// @desc    Create a new chat
 const createChat = async (req, res) => {
   const { title } = req.body;
   if (!title) {
-    return res.status(400).json({ message: "Title is required" });
+    return res
+      .status(400)
+      .json({ message: "A title is required for the chat." });
   }
   try {
     const newChat = await prisma.chat.create({
@@ -46,7 +48,6 @@ const createChat = async (req, res) => {
   }
 };
 
-// @desc    Get a single chat by ID
 const getChatById = async (req, res) => {
   try {
     const chat = await prisma.chat.findFirst({
@@ -57,12 +58,12 @@ const getChatById = async (req, res) => {
       include: {
         messages: { orderBy: { timestamp: "asc" } },
         documents: true,
-        charts: true,
       },
     });
-
     if (!chat) {
-      return res.status(404).json({ message: "Chat not found" });
+      return res
+        .status(404)
+        .json({ message: "Chat not found or not authorized" });
     }
     res.status(200).json(chat);
   } catch (error) {
@@ -72,7 +73,6 @@ const getChatById = async (req, res) => {
   }
 };
 
-// @desc    Delete a chat
 const deleteChat = async (req, res) => {
   try {
     const chat = await prisma.chat.findFirst({
@@ -86,11 +86,7 @@ const deleteChat = async (req, res) => {
         .status(404)
         .json({ message: "Chat not found or not authorized" });
     }
-
-    await prisma.chat.delete({
-      where: { id: req.params.id },
-    });
-
+    await prisma.chat.delete({ where: { id: req.params.id } });
     res.status(200).json({ message: "Chat deleted successfully" });
   } catch (error) {
     res
@@ -99,20 +95,14 @@ const deleteChat = async (req, res) => {
   }
 };
 
-// === NEW gRPC IMPLEMENTATION ===
+// === CORRECTED FUNCTIONS ===
 
-// @desc    Add a message, get AI response via gRPC, and save both
+// @desc    Add a message, get AI response via REST, and save both
 const addMessage = async (req, res) => {
   const { chatId } = req.params;
   const { text } = req.body;
-  const sender = "user";
-
-  if (!text) {
-    return res.status(400).json({ message: "Message text is required" });
-  }
 
   try {
-    // 1. Verify chat exists and belongs to the user
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId: req.user.id },
     });
@@ -122,41 +112,35 @@ const addMessage = async (req, res) => {
         .json({ message: "Chat not found or not authorized" });
     }
 
-    // 2. Save the user's message to the database
+    // Save user message first
     const userMessage = await prisma.message.create({
-      data: { text, sender, chatId },
+      data: { text, sender: "user", chatId },
     });
 
-    // 3. Call the AI service via gRPC and handle the response in a callback
-    grpcClient.AnswerQuery(
-      { query_text: text, chat_id: chatId },
-      async (error, response) => {
-        if (error) {
-          console.error("gRPC Error during AnswerQuery:", error.details);
-          // Save an error message to the chat so the user knows something went wrong
-          await prisma.message.create({
-            data: {
-              text: "Sorry, I encountered an error and could not generate a response.",
-              sender: "assistant",
-              chatId,
-            },
-          });
-        } else {
-          console.log("gRPC AI Response:", response.answer);
-          // 4. Save the AI's successful response to the database
-          await prisma.message.create({
-            data: {
-              text: response.answer,
-              sender: "assistant",
-              chatId,
-            },
-          });
-        }
-      }
-    );
+    // Asynchronously call the AI service, but don't make the user wait
+    axios
+      .post(`${AI_SERVICE_URL}/answer-query`, {
+        query_text: text,
+        chat_id: chatId,
+      })
+      .then(async (response) => {
+        const aiAnswer = response.data.answer;
+        await prisma.message.create({
+          data: { text: aiAnswer, sender: "assistant", chatId },
+        });
+      })
+      .catch(async (error) => {
+        console.error("Error calling AI service for query:", error.message);
+        await prisma.message.create({
+          data: {
+            text: "Sorry, the AI assistant is currently unavailable.",
+            sender: "assistant",
+            chatId,
+          },
+        });
+      });
 
-    // 5. IMPORTANT: Return the user's message to the frontend IMMEDIATELY.
-    // The AI response is handled asynchronously in the background.
+    // Respond immediately with the user's message
     res.status(201).json(userMessage);
   } catch (error) {
     res
@@ -165,7 +149,8 @@ const addMessage = async (req, res) => {
   }
 };
 
-// @desc    Upload a document and trigger processing via gRPC
+// @desc    Upload a document and trigger processing via REST
+// THIS IS THE KEY FIX: The function now `await`s the AI service response.
 const uploadDocumentAndTriggerWorkflow = async (req, res) => {
   const { chatId } = req.params;
 
@@ -174,19 +159,16 @@ const uploadDocumentAndTriggerWorkflow = async (req, res) => {
   }
 
   try {
-    // 1. Verify chat exists and belongs to the user
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId: req.user.id },
     });
     if (!chat) {
-      // Clean up the uploaded file if the chat is invalid
       fs.unlinkSync(req.file.path);
       return res
         .status(404)
         .json({ message: "Chat not found or not authorized" });
     }
 
-    // 2. Save document metadata to the database
     const document = await prisma.document.create({
       data: {
         fileName: req.file.originalname,
@@ -198,27 +180,25 @@ const uploadDocumentAndTriggerWorkflow = async (req, res) => {
       },
     });
 
-    // 3. Asynchronously trigger the AI service via gRPC to process the document
-    // We don't wait for the response, it happens in the background.
-    grpcClient.ProcessDocument(
-      { document_path: document.filePath, chat_id: chatId },
-      (error, response) => {
-        if (error) {
-          console.error("gRPC Error during ProcessDocument:", error.details);
-        } else {
-          console.log("gRPC document processing response:", response.message);
-          // Here you could save a message to the chat like "I've finished reading your document"
-        }
-      }
-    );
+    // THIS IS THE FIX: Wait for the AI service to confirm completion
+    await axios.post(`${AI_SERVICE_URL}/process-document`, {
+      document_path: document.filePath,
+      chat_id: chatId,
+    });
 
+    console.log("Document processing completed successfully.");
+    // Now we can safely tell the user the file is ready
     res
       .status(201)
-      .json({ message: "File uploaded. Processing has started.", document });
+      .json({ message: "File uploaded and processed successfully.", document });
   } catch (error) {
+    console.error("Error in uploadDocumentAndTriggerWorkflow:", error.message);
     res
       .status(500)
-      .json({ message: "Failed to upload document", error: error.message });
+      .json({
+        message: "Failed to upload or process document.",
+        error: error.message,
+      });
   }
 };
 

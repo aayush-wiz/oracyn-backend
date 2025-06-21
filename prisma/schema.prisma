@@ -1,23 +1,12 @@
-// prisma/schema.prisma
-
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// 1. Define the data source (PostgreSQL) and the provider.
-// The DATABASE_URL is an environment variable that will be loaded from the .env file.
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
-
-// 2. Define the generator for the Prisma Client.
-// This tells Prisma to generate the client code for JavaScript.
 generator client {
   provider = "prisma-client-js"
 }
 
-// 3. Define the User model
-// This corresponds to your user accounts.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -25,73 +14,39 @@ model User {
   password  String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // Relations
   chats     Chat[]
   documents Document[]
-  charts    Chart[]
 }
 
-// 4. Define the Chat model
-// This corresponds to the `chats` array in your Zustand store.
 model Chat {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   title     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  user      User       @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   documents Document[]
-  charts    Chart[]
 }
 
-// 5. Define the Message model
-// Represents a single message within a chat.
 model Message {
   id        String   @id @default(uuid())
-  sender    String // "user" or "assistant"
-  text      String   @db.Text
+  sender    String
+  text      String   // No @db.Text for SQLite
   timestamp DateTime @default(now())
-
-  // Relations
-  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  chatId String
+  chatId    String
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 }
 
-// 6. Define the Document model
-// Represents an uploaded file.
 model Document {
   id         String   @id @default(uuid())
   fileName   String
-  filePath   String // Path where the file is stored on the server
+  filePath   String
   fileType   String
-  fileSize   Float // Store size in bytes
+  fileSize   Float
   uploadedAt DateTime @default(now())
-
-  // Relations
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
-  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  chatId String
-}
-
-// 7. Define the Chart model
-// Corresponds to the `charts` array in your Zustand store.
-model Chart {
-  id          String   @id @default(uuid())
-  type        String // e.g., 'bar', 'line'
-  label       String
-  data        Json // Store the complex chart data object as JSON
-  config      Json // Store the chart configuration as JSON
-  createdFrom String
-  createdAt   DateTime @default(now())
-
-  // Relations
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
-  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  chatId String
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  chatId     String
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
 }
