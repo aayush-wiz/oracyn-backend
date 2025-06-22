@@ -1,32 +1,25 @@
-# =================================================================
-# FILE: oracyn-backend/Dockerfile (DEFINITIVE FIX)
-# This uses the 'node:20-bookworm' image to ensure the required
-# system libraries for Prisma are present.
-# =================================================================
-
-# 1. Use a more complete base image that includes necessary system libraries
 FROM node:20-bookworm
 
-# 2. Set working directory in the container
+# Set the working directory
 WORKDIR /usr/src/app
 
-# 3. Copy package.json and package-lock.json
+# Copy package files
 COPY package*.json ./
 
-# 4. Install dependencies
+# Install dependencies securely during the build
 RUN npm install
 
-# 5. Copy Prisma schema
+# Copy the Prisma schema
 COPY prisma ./prisma/
 
-# 6. Generate Prisma Client
+# Generate the Prisma client
 RUN npx prisma generate
 
-# 7. Copy the rest of your application's source code
+# Copy the rest of the application code
 COPY . .
 
-# 8. Expose the port the app runs on
+# Expose the port
 EXPOSE 3000
 
-# 9. Command to run the application
-CMD ["npm", "start"]
+# This is the ONLY command that runs on startup now.
+CMD [ "npm", "run", "start" ]
