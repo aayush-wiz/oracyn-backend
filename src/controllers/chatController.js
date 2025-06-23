@@ -1,6 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
-const fs = require("fs");
+const fs = require("fs").promises; // Use the promise-based version of fs
 const axios = require("axios");
 
 const AI_SERVICE_URL =
@@ -97,7 +97,7 @@ const deleteChat = async (req, res) => {
   }
 };
 
-// @desc    Upload a document and trigger processing via REST, waiting for completion
+// @desc    Upload a document and trigger processing by sending its content
 const uploadDocumentAndTriggerWorkflow = async (req, res) => {
   const { chatId } = req.params;
 
@@ -110,16 +110,22 @@ const uploadDocumentAndTriggerWorkflow = async (req, res) => {
       where: { id: chatId, userId: req.user.id },
     });
     if (!chat) {
-      fs.unlinkSync(req.file.path);
+      await fs.unlink(req.file.path); // Clean up the orphaned file
       return res
         .status(404)
         .json({ message: "Chat not found or not authorized" });
     }
 
+    // 1. Read the file content that multer just saved
+    const fileContent = await fs.readFile(req.file.path);
+    // Encode the file content to Base64 to safely send it in JSON
+    const base64Content = fileContent.toString("base64");
+
+    // 2. Save document metadata to our database
     const document = await prisma.document.create({
       data: {
         fileName: req.file.originalname,
-        filePath: req.file.path,
+        filePath: req.file.path, // We can still save the original path for reference
         fileType: req.file.mimetype,
         fileSize: req.file.size,
         chatId: chatId,
@@ -127,13 +133,17 @@ const uploadDocumentAndTriggerWorkflow = async (req, res) => {
       },
     });
 
-    // Wait for the AI service to confirm the document has been processed
+    // 3. Send the file content directly to the AI service
     await axios.post(`${AI_SERVICE_URL}/process-document`, {
-      document_path: document.filePath,
+      file_name: req.file.originalname, // Send the original name
+      file_content_base64: base64Content, // Send the encoded content
       chat_id: chatId,
     });
 
-    console.log("Document processing completed successfully.");
+    // 4. Clean up the temporary file from the backend's storage
+    await fs.unlink(req.file.path);
+
+    console.log("Document content sent and processed successfully.");
     res
       .status(201)
       .json({ message: "File uploaded and processed successfully.", document });
@@ -157,57 +167,45 @@ const addMessage = async (req, res) => {
     const chat = await prisma.chat.findFirst({
       where: { id: chatId, userId: req.user.id },
     });
-    if (!chat) {
-      return res
-        .status(404)
-        .json({ message: "Chat not found or not authorized" });
-    }
+    if (!chat) return res.status(404).json({ message: "Chat not found" });
 
-    // 1. Fetch recent chat history from the database
     const recentMessages = await prisma.message.findMany({
-      where: { chatId: chatId },
+      where: { chatId },
       orderBy: { timestamp: "desc" },
-      take: 6, // Get the last 6 messages for context
+      take: 6,
     });
 
-    // Reverse the messages to be in chronological order and format them for the AI
-    const historyForAI = recentMessages.reverse().map((msg) => ({
-      role: msg.sender, // 'user' or 'assistant'
-      content: msg.text,
-    }));
+    const historyForAI = recentMessages
+      .reverse()
+      .map((msg) => ({ role: msg.sender, content: msg.text }));
 
-    // 2. Save the new user message to our database
     const userMessage = await prisma.message.create({
       data: { text, sender: "user", chatId },
     });
 
-    // 3. Asynchronously call the AI service with the new question and the history
     axios
       .post(`${AI_SERVICE_URL}/answer-query`, {
         query_text: text,
         chat_id: chatId,
-        history: historyForAI, // <-- Send the history
+        history: historyForAI,
       })
       .then(async (response) => {
         const aiAnswer = response.data.answer;
-        // Save the AI's response to the database
         await prisma.message.create({
           data: { text: aiAnswer, sender: "assistant", chatId },
         });
       })
       .catch(async (error) => {
         console.error("Error calling AI service for query:", error.message);
-        // Save an error message to the chat if the AI fails
         await prisma.message.create({
           data: {
-            text: "Sorry, the AI assistant is currently unavailable.",
+            text: "Sorry, the AI assistant is unavailable.",
             sender: "assistant",
             chatId,
           },
         });
       });
 
-    // 4. Respond to the user immediately with their own saved message
     res.status(201).json(userMessage);
   } catch (error) {
     res

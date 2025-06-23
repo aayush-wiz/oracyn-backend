@@ -1,16 +1,13 @@
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
-// Ensure the uploads directory exists
-const uploadDir = "uploads/";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+// THIS IS THE KEY FIX: Define the absolute path for the shared directory.
+const uploadDir = "/shared/uploads/";
 
 // Set up storage engine
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
+    // Save files directly to the correct shared path.
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
@@ -26,23 +23,7 @@ const storage = multer.diskStorage({
 // Initialize upload
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 10000000 }, // Limit file size to 10MB
-  fileFilter: (req, file, cb) => {
-    // Allow any file type for now, but you could restrict it here
-    // Example to allow only pdf, doc, docx, txt:
-    const filetypes = /pdf|doc|docx|txt/;
-    const mimetype = filetypes.test(file.mimetype);
-    const extname = filetypes.test(
-      path.extname(file.originalname).toLowerCase()
-    );
-    if (mimetype && extname) {
-      return cb(null, true);
-    }
-    cb(
-      "Error: File upload only supports the following filetypes - " + filetypes
-    );
-    cb(null, true);
-  },
+  limits: { fileSize: 15000000 }, // 15MB limit
 });
 
 module.exports = upload;
