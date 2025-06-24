@@ -16,6 +16,7 @@ model User {
   updatedAt DateTime   @updatedAt
   chats     Chat[]
   documents Document[]
+  charts    Chart[] // Relation to Chart model
 }
 
 model Chat {
@@ -27,6 +28,7 @@ model Chat {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   documents Document[]
+  charts    Chart[] // Relation to Chart model
 }
 
 model Message {
@@ -49,4 +51,20 @@ model Document {
   user       User     @relation(fields: [userId], references: [id])
   chatId     String
   chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+}
+
+model Chart {
+  id          String   @id @default(uuid())
+  type        String
+  label       String
+  data        String   // Changed from Json to String
+  config      String   // Changed from Json to String
+  createdFrom String
+  createdAt   DateTime @default(now())
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  
+  chatId String
+  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
 }
