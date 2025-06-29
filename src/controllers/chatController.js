@@ -149,12 +149,10 @@ const uploadDocumentAndTriggerWorkflow = async (req, res) => {
       .json({ message: "File uploaded and processed successfully.", document });
   } catch (error) {
     console.error("Error in uploadDocumentAndTriggerWorkflow:", error.message);
-    res
-      .status(500)
-      .json({
-        message: "Failed to upload or process document.",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Failed to upload or process document.",
+      error: error.message,
+    });
   }
 };
 
@@ -190,9 +188,16 @@ const addMessage = async (req, res) => {
         history: historyForAI,
       })
       .then(async (response) => {
-        const aiAnswer = response.data.answer;
+        // Destructure the response to get both answer and tokens
+        const { answer, tokens_used } = response.data;
         await prisma.message.create({
-          data: { text: aiAnswer, sender: "assistant", chatId },
+          data: {
+            text: answer,
+            sender: "assistant",
+            chatId,
+            // Save the token count with the AI's message
+            tokensUsed: tokens_used || 0,
+          },
         });
       })
       .catch(async (error) => {

@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -16,7 +18,7 @@ model User {
   updatedAt DateTime   @updatedAt
   chats     Chat[]
   documents Document[]
-  charts    Chart[] // Relation to Chart model
+  charts    Chart[]
 }
 
 model Chat {
@@ -28,16 +30,17 @@ model Chat {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  Message[]
   documents Document[]
-  charts    Chart[] // Relation to Chart model
+  charts    Chart[]
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  sender    String
-  text      String
-  timestamp DateTime @default(now())
-  chatId    String
-  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  id         String   @id @default(uuid())
+  sender     String // "user" or "assistant"
+  text       String
+  timestamp  DateTime @default(now())
+  chatId     String
+  chat       Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tokensUsed Int?     @default(0)
 }
 
 model Document {
@@ -57,14 +60,13 @@ model Chart {
   id          String   @id @default(uuid())
   type        String
   label       String
-  data        String   // Changed from Json to String
-  config      String   // Changed from Json to String
+  data        String
+  config      String
   createdFrom String
   createdAt   DateTime @default(now())
-  
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-  
-  chatId String
-  chat   Chat   @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  chatId      String
+  chat        Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  tokensUsed  Int?     @default(0)
 }

@@ -8,11 +8,11 @@ const {
   addMessage,
   uploadDocumentAndTriggerWorkflow,
 } = require("../controllers/chatController");
-const { protect } = require("../middleware/authMiddleware");
+const authMiddleware = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 
 // Apply protect middleware to all chat routes
-router.use(protect);
+router.use(authMiddleware);
 
 // Routes for chats
 router.route("/").get(getChats).post(createChat);

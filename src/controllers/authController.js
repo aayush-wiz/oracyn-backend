@@ -1,95 +1,114 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: 'file:/usr/src/app/prisma/dev.db',
-    },
-  },
-});
 
-console.log(process.env.DATABASE_URL);
+const prisma = new PrismaClient();
 
-// Generate JWT
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: "30d",
-  });
-};
-
-// @desc    Register a new user
-const registerUser = async (req, res) => {
-  const { username, email, password } = req.body;
-
-  if (!username || !email || !password) {
-    return res.status(400).json({ message: "Please add all fields" });
-  }
-
-  // Check if user exists
-  const userExists = await prisma.user.findUnique({ where: { email } });
-  if (userExists) {
-    return res.status(400).json({ message: "User already exists" });
-  }
-
-  // Hash password
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
-
-  // Create user
+exports.signup = async (req, res) => {
   try {
-    const user = await prisma.user.create({
-      data: {
-        username,
-        email,
-        password: hashedPassword,
+    const { username, email, password } = req.body;
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, { username }],
       },
     });
 
-    if (user) {
-      res.status(201).json({
-        _id: user.id,
+    if (existingUser) {
+      return res.status(400).json({ error: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const user = await prisma.user.create({
+      data: { username, email, password: hashedPassword },
+    });
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.status(201).json({
+      user: {
+        id: user.id,
         username: user.username,
         email: user.email,
-        token: generateToken(user.id),
-      });
-    } else {
-      res.status(400).json({ message: "Invalid user data" });
-    }
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Could not create user", error: error.message });
-  }
-};
-
-// @desc    Authenticate a user
-const loginUser = async (req, res) => {
-  const { email, password } = req.body;
-
-  // Check for user email
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  if (user && (await bcrypt.compare(password, user.password))) {
-    res.json({
-      _id: user.id,
-      username: user.username,
-      email: user.email,
-      token: generateToken(user.id),
+      },
     });
-  } else {
-    res.status(400).json({ message: "Invalid credentials" });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-// @desc    Get user profile
-const getUserProfile = async (req, res) => {
-  // req.user is attached by the protect middleware
-  res.status(200).json(req.user);
+exports.signin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, username: user.username },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
 };
 
-module.exports = {
-  registerUser,
-  loginUser,
-  getUserProfile,
+exports.getCurrentUser = async (req, res) => {
+  try {
+    const token = req.cookies.token;
+    if (!token) {
+      return res.status(401).json({ error: "No token" });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.id },
+      select: { id: true, username: true, email: true },
+    });
+
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    res.status(401).json({ error: "Invalid token" });
+  }
+};
+
+exports.signout = (req, res) => {
+  res.clearCookie("token");
+  res.json({ message: "Signed out" });
 };
