@@ -5,9 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "db:migrate": "prisma migrate dev --name init",
-    "db:generate": "prisma generate"
+    "dev": "nodemon src/server.js"
   },
   "dependencies": {
     "@prisma/client": "^5.15.1",

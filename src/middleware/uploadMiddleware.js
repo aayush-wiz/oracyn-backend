@@ -1,26 +1,11 @@
 const multer = require("multer");
-const path = require("path");
 
-// THIS IS THE KEY FIX: Define the absolute path for the shared directory.
-const uploadDir = "/shared/uploads/";
+// Use memoryStorage to handle the file as a buffer in memory.
+// This is more efficient for this use case and avoids all file system
+// permission and pathing errors, whether running locally or in Docker.
+const storage = multer.memoryStorage();
 
-// Set up storage engine
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    // Save files directly to the correct shared path.
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Create a unique filename to avoid conflicts
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(
-      null,
-      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
-    );
-  },
-});
-
-// Initialize upload
+// Initialize upload with the new storage engine and file size limit.
 const upload = multer({
   storage: storage,
   limits: { fileSize: 15000000 }, // 15MB limit
