@@ -24,21 +24,48 @@ const getChats = async (req, res) => {
 // @desc    Create a new chat
 const createChat = async (req, res) => {
   const { title } = req.body;
+
   if (!title) {
     return res
       .status(400)
       .json({ message: "A title is required for the chat." });
   }
+
   try {
+    const chats = await prisma.chat.findMany({
+      where: { userId: req.user.id },
+      include: {
+        messages: true, // to check if chat is empty
+      },
+    });
+
+    // Check if a chat with the same title already exists
+    const hasDuplicateTitle = chats.some((chat) => chat.title === title);
+    if (hasDuplicateTitle) {
+      return res
+        .status(400)
+        .json({ message: "A chat with this title already exists." });
+    }
+
+    // Check if the user already has an empty chat
+    const hasEmptyChat = chats.some((chat) => chat.messages.length === 0);
+    if (hasEmptyChat) {
+      return res
+        .status(400)
+        .json({ message: "You already have an empty chat." });
+    }
+
     const newChat = await prisma.chat.create({
       data: {
         title,
         userId: req.user.id,
       },
     });
-    res.status(201).json(newChat);
+
+    return res.status(201).json(newChat);
   } catch (error) {
-    res
+    console.error("Failed to create chat:", error);
+    return res
       .status(500)
       .json({ message: "Failed to create chat", error: error.message });
   }
@@ -238,11 +265,43 @@ const addMessage = async (req, res) => {
   }
 };
 
+// @desc    Update the title of a chat
+const updateTitle = async (req, res) => {
+  const { id } = req.params;
+  const { title } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ message: "Title is required." });
+  }
+  try {
+    const chat = await prisma.chat.findFirst({
+      where: { id, userId: req.user.id },
+    });
+    if (!chat) {
+      return res
+        .status(404)
+        .json({ message: "Chat not found or not authorized" });
+    }
+
+    const updatedChat = await prisma.chat.update({
+      where: { id },
+      data: { title },
+    });
+
+    res.status(200).json(updatedChat);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to update chat title", error: error.message });
+  }
+};
+
 module.exports = {
   getChats,
   createChat,
   getChatById,
   deleteChat,
   addMessage,
+  updateTitle,
   uploadDocumentAndTriggerWorkflow,
 };
