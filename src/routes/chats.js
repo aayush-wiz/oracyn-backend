@@ -16,8 +16,12 @@ const upload = require("../middleware/uploadMiddleware");
 router.use(authMiddleware);
 
 // Routes for chats
-router.route("/").get(getChats).post(createChat);
-router.route("/:id").get(getChatById).delete(deleteChat);
+router.route("/")
+  .get(getChats)
+  .post(createChat);
+router.route("/:id")
+  .get(getChatById)
+  .delete(deleteChat);
 
 // Route for updating a chat's title
 router.route("/:id").put(updateTitle);
